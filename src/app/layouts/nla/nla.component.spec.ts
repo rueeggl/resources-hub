@@ -1,18 +1,18 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-import { ResourcesComponent } from './resources.component';
+import { NlaComponent } from './nla.component';
 
-describe('ResourcesComponent', () => {
-  let component: ResourcesComponent;
-  let fixture: ComponentFixture<ResourcesComponent>;
+describe('NlaComponent', () => {
+  let component: NlaComponent;
+  let fixture: ComponentFixture<NlaComponent>;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ResourcesComponent]
+      imports: [NlaComponent]
     })
     .compileComponents();
 
-    fixture = TestBed.createComponent(ResourcesComponent);
+    fixture = TestBed.createComponent(NlaComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
   });
