@@ -1,5 +1,5 @@
 import { bootstrapApplication } from '@angular/platform-browser';
-import { provideRouter, Route } from '@angular/router';
+import { provideRouter, Route, withHashLocation } from '@angular/router';
 import { importProvidersFrom } from '@angular/core';
 import { AppComponent } from './app/app.component';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
@@ -16,7 +16,7 @@ const routes: Route[] = [
     children: [
       { path: 'nla', component: NlaComponent },
       { path: 'nlb', component: NlbComponent },
-      {path: 'general', component: GeneralComponent },
+      { path: 'general', component: GeneralComponent },
     ],
   },
   { path: '**', redirectTo: '/nla' },
@@ -24,7 +24,7 @@ const routes: Route[] = [
 
 bootstrapApplication(AppComponent, {
   providers: [
-    provideRouter(routes),
+    provideRouter(routes, withHashLocation()),
     importProvidersFrom(BrowserAnimationsModule)
   ]
 }).catch(err => console.error(err));
