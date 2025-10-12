@@ -1,0 +1,40 @@
+<div class="min-h-screen bg-gray-50 text-gray-800">
+
+  <!-- Banner -->
+  <header class="bg-gradient-to-r from-indigo-500 to-purple-600 text-white py-12 text-center shadow-lg">
+    <h1 class="text-4xl font-bold mb-2">Resource Hub</h1>
+    <p class="text-lg opacity-90">Download helpful documents and explore curated links</p>
+  </header>
+
+  <!-- Tabs -->
+  <div class="flex justify-center mt-6">
+    <div class="bg-white rounded-full shadow p-1 flex space-x-1">
+      <a
+        routerLink="/nla"
+        routerLinkActive="bg-indigo-500 text-white"
+        class="px-4 py-2 rounded-full font-medium transition hover:bg-indigo-100"
+      >
+        NLA
+      </a>
+      <a
+        routerLink="/nlb"
+        routerLinkActive="bg-indigo-500 text-white"
+        class="px-4 py-2 rounded-full font-medium transition hover:bg-indigo-100"
+      >
+        NLB
+      </a>
+      <a
+        routerLink="/general"
+        routerLinkActive="bg-indigo-500 text-white"
+        class="px-4 py-2 rounded-full font-medium transition hover:bg-indigo-100"
+      >
+        General
+      </a>
+    </div>
+  </div>
+
+  <!-- Page Content -->
+  <main class="mt-10">
+    <router-outlet></router-outlet>
+  </main>
+</div>
