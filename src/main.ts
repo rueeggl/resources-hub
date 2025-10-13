@@ -7,6 +7,7 @@ import { HomeComponent } from './app/home/home/home.component';
 import { NlbComponent } from './app/layouts/nlb/nlb.component';
 import { NlaComponent } from './app/layouts/nla/nla.component';
 import { GeneralComponent } from './app/layouts/general/general.component';
+import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 
 const routes: Route[] = [
   { path: '', redirectTo: '/nla', pathMatch: 'full' },
@@ -25,6 +26,6 @@ const routes: Route[] = [
 bootstrapApplication(AppComponent, {
   providers: [
     provideRouter(routes),
-    importProvidersFrom(BrowserAnimationsModule)
+    importProvidersFrom(BrowserAnimationsModule), provideAnimationsAsync()
   ]
 }).catch(err => console.error(err));
