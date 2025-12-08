@@ -356,60 +356,76 @@ export class NlaComponent implements OnInit {
   } {
     const data: any = {};
 
-    // Extract game number (e.g., #377790)
-    const gameMatch = description.match(/Spiel: #(\d+)/);
+    // Try German format first, then French
+    let gameMatch = description.match(/Spiel: #(\d+)/);
+    if (!gameMatch) {
+      gameMatch = description.match(/Match: #(\d+)/);
+    }
     if (gameMatch) {
       data.gameNumber = gameMatch[1];
     }
 
-    // Extract game date (e.g., "29.11.2025 18:00" from "Spiel: #377790 | 29.11.2025 18:00 | ...")
-    const dateMatch = description.match(/Spiel: #\d+ \| (\d{2}\.\d{2}\.\d{4})/);
+    // Date parsing (German and French)
+    let dateMatch = description.match(/Spiel: #\d+ \| (\d{2}\.\d{2}\.\d{4})/);
+    if (!dateMatch) {
+      dateMatch = description.match(/Match: #\d+ \| (\d{2}\.\d{2}\.\d{4})/);
+    }
     if (dateMatch) {
       data.gameDate = dateMatch[1];
     }
 
-    // Extract teams (e.g., Lausanne UC — Volley Amriswil)
-    const teamsMatch = description.match(/Spiel: #\d+ \| .+ \| (.+) — (.+)/);
+    // Teams parsing (German and French)
+    let teamsMatch = description.match(/Spiel: #\d+ \| .+ \| (.+) — (.+)/);
+    if (!teamsMatch) {
+      teamsMatch = description.match(/Match: #\d+ \| .+ \| (.+) — (.+)/);
+    }
     if (teamsMatch) {
       data.homeTeam = teamsMatch[1].trim();
       data.awayTeam = teamsMatch[2].trim();
     }
 
-    // Extract league (e.g., "NLA | ♂" from "Liga: #6607 | NLA | ♂")
-    const leagueMatch = description.match(/Liga: #\d+ \| ([^\n]+)/);
+    // League parsing (German and French)
+    let leagueMatch = description.match(/Liga: #\d+ \| ([^\n]+)/);
+    if (!leagueMatch) {
+      leagueMatch = description.match(/Ligue: #\d+ \| ([^\n]+)/);
+    }
     if (leagueMatch) {
-      // Extract both league name and gender symbol
       const leagueInfo = leagueMatch[1].trim();
-      // Remove extra pipes and spaces, combine league and gender (e.g., "NLA | ♂" -> "NLA ♂")
       data.league = leagueInfo.replace(/\s*\|\s*/g, ' ').trim();
     }
 
-    // Extract venue name (e.g., "Centre Sportif Unil SOS II Dorigny 1-3" from "Halle: #82 | Centre Sportif Unil SOS II Dorigny 1-3 (A)")
-    const venueMatch = description.match(/Halle: #\d+ \| ([^\n(]+)/);
+    // Venue parsing (German and French)
+    let venueMatch = description.match(/Halle: #\d+ \| ([^\n(]+)/);
+    if (!venueMatch) {
+      venueMatch = description.match(/Salle: #\d+ \| ([^\n(]+)/);
+    }
     if (venueMatch) {
       data.venueName = venueMatch[1].trim();
     }
 
-    // Extract venue address and parse city
+    // Address parsing (same in both languages)
     const addressMatch = description.match(/Adresse: ([^\n]+)/);
     if (addressMatch) {
       data.venueAddress = addressMatch[1].trim();
-
-      // Extract postal code + city (e.g., "1015 Lausanne" from "Route Cantonale 11, 1015 Lausanne")
       const cityMatch = addressMatch[1].match(/(\d{4}\s+[^,]+)/);
       if (cityMatch) {
         data.city = cityMatch[1].trim();
       }
     }
 
-    // Extract 1. SR name (e.g., "Laura Rüegg" from "1. SR: Laura Rüegg | laura.rueegg@me.com | +41796558486")
-    const firstRefMatch = description.match(/1\. SR: ([^|]+)/);
+    // Referee parsing (German and French)
+    let firstRefMatch = description.match(/1\. SR: ([^|]+)/);
+    if (!firstRefMatch) {
+      firstRefMatch = description.match(/ARB 1: ([^|]+)/);
+    }
     if (firstRefMatch) {
       data.firstReferee = firstRefMatch[1].trim();
     }
 
-    // Extract 2. SR name (e.g., "Thierry Mordasini" from "2. SR: Thierry Mordasini | thierryvolley@hotmail.ch | +41794433107")
-    const secondRefMatch = description.match(/2\. SR: ([^|]+)/);
+    let secondRefMatch = description.match(/2\. SR: ([^|]+)/);
+    if (!secondRefMatch) {
+      secondRefMatch = description.match(/ARB 2: ([^|]+)/);
+    }
     if (secondRefMatch) {
       data.secondReferee = secondRefMatch[1].trim();
     }

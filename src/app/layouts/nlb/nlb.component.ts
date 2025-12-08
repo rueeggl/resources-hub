@@ -314,28 +314,55 @@ export class NlbComponent implements OnInit {
     secondReferee?: string;
   } {
     const data: any = {};
-    const gameMatch = description.match(/Spiel: #(\d+)/);
+
+    // Try German format first, then French
+    let gameMatch = description.match(/Spiel: #(\d+)/);
+    if (!gameMatch) {
+      gameMatch = description.match(/Match: #(\d+)/);
+    }
     if (gameMatch) {
       data.gameNumber = gameMatch[1];
     }
-    const dateMatch = description.match(/Spiel: #\d+ \| (\d{2}\.\d{2}\.\d{4})/);
+
+    // Date parsing (German and French)
+    let dateMatch = description.match(/Spiel: #\d+ \| (\d{2}\.\d{2}\.\d{4})/);
+    if (!dateMatch) {
+      dateMatch = description.match(/Match: #\d+ \| (\d{2}\.\d{2}\.\d{4})/);
+    }
     if (dateMatch) {
       data.gameDate = dateMatch[1];
     }
-    const teamsMatch = description.match(/Spiel: #\d+ \| .+ \| (.+) — (.+)/);
+
+    // Teams parsing (German and French)
+    let teamsMatch = description.match(/Spiel: #\d+ \| .+ \| (.+) — (.+)/);
+    if (!teamsMatch) {
+      teamsMatch = description.match(/Match: #\d+ \| .+ \| (.+) — (.+)/);
+    }
     if (teamsMatch) {
       data.homeTeam = teamsMatch[1].trim();
       data.awayTeam = teamsMatch[2].trim();
     }
-    const leagueMatch = description.match(/Liga: #\d+ \| ([^\n]+)/);
+
+    // League parsing (German and French)
+    let leagueMatch = description.match(/Liga: #\d+ \| ([^\n]+)/);
+    if (!leagueMatch) {
+      leagueMatch = description.match(/Ligue: #\d+ \| ([^\n]+)/);
+    }
     if (leagueMatch) {
       const leagueInfo = leagueMatch[1].trim();
       data.league = leagueInfo.replace(/\s*\|\s*/g, ' ').trim();
     }
-    const venueMatch = description.match(/Halle: #\d+ \| ([^\n(]+)/);
+
+    // Venue parsing (German and French)
+    let venueMatch = description.match(/Halle: #\d+ \| ([^\n(]+)/);
+    if (!venueMatch) {
+      venueMatch = description.match(/Salle: #\d+ \| ([^\n(]+)/);
+    }
     if (venueMatch) {
       data.venueName = venueMatch[1].trim();
     }
+
+    // Address parsing (same in both languages)
     const addressMatch = description.match(/Adresse: ([^\n]+)/);
     if (addressMatch) {
       data.venueAddress = addressMatch[1].trim();
@@ -344,14 +371,24 @@ export class NlbComponent implements OnInit {
         data.city = cityMatch[1].trim();
       }
     }
-    const firstRefMatch = description.match(/1\. SR: ([^|]+)/);
+
+    // Referee parsing (German and French)
+    let firstRefMatch = description.match(/1\. SR: ([^|]+)/);
+    if (!firstRefMatch) {
+      firstRefMatch = description.match(/ARB 1: ([^|]+)/);
+    }
     if (firstRefMatch) {
       data.firstReferee = firstRefMatch[1].trim();
     }
-    const secondRefMatch = description.match(/2\. SR: ([^|]+)/);
+
+    let secondRefMatch = description.match(/2\. SR: ([^|]+)/);
+    if (!secondRefMatch) {
+      secondRefMatch = description.match(/ARB 2: ([^|]+)/);
+    }
     if (secondRefMatch) {
       data.secondReferee = secondRefMatch[1].trim();
     }
+
     return data;
   }
 }
