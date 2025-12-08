@@ -76,7 +76,7 @@ export class NlaComponent implements OnInit {
         this.events = parsedEvents.filter(
           (event) =>
             event.start.getTime() >= startOfWeek.getTime() &&
-            event.summary?.includes('1. SR') &&
+            (event.summary?.includes('ARB 1') || event.summary?.includes('1. SR')) &&
             event.summary?.includes('(NLA)')
         );
         this.loading = false;

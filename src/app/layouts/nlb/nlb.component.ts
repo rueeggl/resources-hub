@@ -75,7 +75,7 @@ export class NlbComponent implements OnInit {
         this.events = parsedEvents.filter(
           (event) =>
             event.start.getTime() >= startOfWeek.getTime() &&
-            event.summary?.includes('1. SR') &&
+            (event.summary?.includes('ARB 1') || event.summary?.includes('1. SR')) &&
             event.summary?.includes('(NLB)')
         );
         this.loading = false;
