@@ -65,29 +65,60 @@ export class NlaComponent implements OnInit {
     this.errorMessage = '';
     this.events = [];
 
-    // Use a CORS proxy for fetching iCal data
-    const proxyUrl = 'https://api.allorigins.win/raw?url=';
-    const url = proxyUrl + encodeURIComponent(this.icalUrl);
+    // Try fetching with multiple CORS proxies as fallback
+    this.fetchWithFallback(this.icalUrl);
+  }
 
-    this.http.get(url, { responseType: 'text' }).subscribe({
+  private fetchWithFallback(url: string, proxyIndex: number = 0) {
+    const corsProxies = [
+      'https://corsproxy.io/?',
+      'https://api.allorigins.win/raw?url=',
+      'https://api.codetabs.com/v1/proxy?quest='
+    ];
+
+    if (proxyIndex >= corsProxies.length) {
+      this.errorMessage = 'Fehler beim Laden des Kalenders. Alle Proxy-Server sind nicht erreichbar.';
+      this.loading = false;
+      return;
+    }
+
+    const proxyUrl = corsProxies[proxyIndex] + encodeURIComponent(url);
+
+    this.http.get(proxyUrl, { responseType: 'text' }).subscribe({
       next: (data) => {
         const parsedEvents = this.parseICalendar(data);
-        const startOfWeek = this.getStartOfWeek(new Date());
+
+        const today = new Date();
+        const currentDay = today.getDay();
+        const daysToMonday = (currentDay + 6) % 7;
+        const lastWeekStart = new Date(today);
+        lastWeekStart.setDate(today.getDate() - daysToMonday - 7);
+        lastWeekStart.setHours(0, 0, 0, 0);
+
         this.events = parsedEvents.filter(
-          (event) =>
-            event.start.getTime() >= startOfWeek.getTime() &&
-            (event.summary?.includes('ARB 1') || event.summary?.includes('1. SR')) &&
-            event.summary?.includes('(NLA)')
+          (event) => {
+            const isAfterCutoff = event.start.getTime() >= lastWeekStart.getTime();
+            const isFirstReferee = event.summary?.includes('ARB 1') || event.summary?.includes('1. SR');
+
+            if (!isAfterCutoff || !isFirstReferee) {
+              return false;
+            }
+
+            const summaryText = (event.summary || '') + ' ' + (event.description || '');
+            const hasMobiliar = summaryText.includes('Mobiliar');
+            const hasNLA = summaryText.includes('(NLA)') || summaryText.includes('(LNA)');
+
+            return hasMobiliar || hasNLA;
+          }
         );
+
         this.loading = false;
         if (this.events.length === 0) {
           this.errorMessage = 'Keine Events gefunden';
         }
       },
-      error: (error) => {
-        console.error('Error loading calendar:', error);
-        this.errorMessage = 'Fehler beim Laden des Kalenders. Bitte überprüfen Sie die URL.';
-        this.loading = false;
+      error: (_error) => {
+        this.fetchWithFallback(url, proxyIndex + 1);
       }
     });
   }
@@ -95,10 +126,8 @@ export class NlaComponent implements OnInit {
   private parseICalDate(dateStr: string): Date | null {
     if (!dateStr) return null;
 
-    // Remove TZID and other parameters
     dateStr = dateStr.split(':').pop() || '';
 
-    // Handle both date and datetime formats
     const year = parseInt(dateStr.substring(0, 4));
     const month = parseInt(dateStr.substring(4, 6)) - 1;
     const day = parseInt(dateStr.substring(6, 8));
@@ -120,7 +149,6 @@ export class NlaComponent implements OnInit {
     for (let i = 0; i < lines.length; i++) {
       let line = lines[i].trim();
 
-      // Handle line folding (continuation lines start with space or tab)
       while (i + 1 < lines.length && (lines[i + 1].startsWith(' ') || lines[i + 1].startsWith('\t'))) {
         i++;
         line += lines[i].substring(1);
@@ -154,7 +182,6 @@ export class NlaComponent implements OnInit {
       }
     }
 
-    // Sort events by start date
     return events.sort((a, b) => a.start.getTime() - b.start.getTime());
   }
 
@@ -182,14 +209,6 @@ export class NlaComponent implements OnInit {
     }).format(date);
   }
 
-  private getStartOfWeek(date: Date): Date {
-    const start = new Date(date);
-    const day = start.getDay();
-    const diff = (day + 6) % 7; // Monday as start of the week
-    start.setDate(start.getDate() - diff);
-    start.setHours(0, 0, 0, 0);
-    return start;
-  }
 
   getLrFeedbackLink(event: CalendarEvent): string {
     const params = new URLSearchParams({
@@ -240,82 +259,64 @@ export class NlaComponent implements OnInit {
   }
 
   private fillPdfFields(form: any, event: CalendarEvent) {
-    // Parse event description to extract structured data
     const parsedData = this.parseEventDescription(event.description || '');
     try {
-      // Fill SpielNr field with game number
       if (parsedData.gameNumber) {
         try {
           form.getTextField('SpielNr').setText(parsedData.gameNumber);
         } catch (e) {
-          console.log('SpielNr field not found');
         }
       }
 
-      // Fill Heimteam (home team)
       if (parsedData.homeTeam) {
         try {
           form.getTextField('Heimteam').setText(parsedData.homeTeam);
         } catch (e) {
-          console.log('Heimteam field not found');
         }
       }
 
-      // Fill Gastteam (away team)
       if (parsedData.awayTeam) {
         try {
           form.getTextField('Gastteam').setText(parsedData.awayTeam);
         } catch (e) {
-          console.log('Gastteam field not found');
         }
       }
 
-      // Fill Hallenname (venue name)
       if (parsedData.venueName) {
         try {
           form.getTextField('Hallenname').setText(parsedData.venueName);
         } catch (e) {
-          console.log('Hallenname field not found');
         }
       }
 
-      // Fill Ort (city with postal code)
       if (parsedData.city) {
         try {
           form.getTextField('Ort').setText(parsedData.city);
         } catch (e) {
-          console.log('Ort field not found');
         }
       }
 
-      // Fill Datum (date in DD.MM.YYYY format)
       if (parsedData.gameDate) {
         try {
           form.getTextField('Datum').setText(parsedData.gameDate);
         } catch (e) {
-          console.log('Datum field not found');
         }
       }
 
-      // Fill Text19 (1. SR name)
       if (parsedData.firstReferee) {
         try {
           form.getTextField('Text19').setText(parsedData.firstReferee);
         } catch (e) {
-          console.log('Text19 field not found');
         }
       }
 
-      // Fill Text20 (2. SR name)
       if (parsedData.secondReferee) {
         try {
           form.getTextField('Text20').setText(parsedData.secondReferee);
         } catch (e) {
-          console.log('Text20 field not found');
         }
       }
 
-      // Check radio button for gender
       if (parsedData.league) {
         try {
           const radioGroup = form.getRadioGroup('Gruppe3');
@@ -323,22 +324,18 @@ export class NlaComponent implements OnInit {
 
           if (options.length > 0) {
             if (parsedData.league.includes('♂')) {
-              // Male - select first option
               radioGroup.select(options[0]);
             } else if (parsedData.league.includes('♀')) {
-              // Female - select second option
               if (options.length > 1) {
                 radioGroup.select(options[1]);
               }
             }
           }
         } catch (e) {
-          console.log('Gruppe3 radio group not found or could not select:', e);
         }
       }
 
     } catch (e) {
-      console.error('Error filling PDF fields:', e);
     }
   }
 
@@ -356,7 +353,6 @@ export class NlaComponent implements OnInit {
   } {
     const data: any = {};
 
-    // Try German format first, then French
     let gameMatch = description.match(/Spiel: #(\d+)/);
     if (!gameMatch) {
       gameMatch = description.match(/Match: #(\d+)/);
@@ -365,7 +361,6 @@ export class NlaComponent implements OnInit {
       data.gameNumber = gameMatch[1];
     }
 
-    // Date parsing (German and French)
     let dateMatch = description.match(/Spiel: #\d+ \| (\d{2}\.\d{2}\.\d{4})/);
     if (!dateMatch) {
       dateMatch = description.match(/Match: #\d+ \| (\d{2}\.\d{2}\.\d{4})/);
@@ -374,7 +369,6 @@ export class NlaComponent implements OnInit {
       data.gameDate = dateMatch[1];
     }
 
-    // Teams parsing (German and French)
     let teamsMatch = description.match(/Spiel: #\d+ \| .+ \| (.+) — (.+)/);
     if (!teamsMatch) {
       teamsMatch = description.match(/Match: #\d+ \| .+ \| (.+) — (.+)/);
@@ -384,7 +378,6 @@ export class NlaComponent implements OnInit {
       data.awayTeam = teamsMatch[2].trim();
     }
 
-    // League parsing (German and French)
     let leagueMatch = description.match(/Liga: #\d+ \| ([^\n]+)/);
     if (!leagueMatch) {
       leagueMatch = description.match(/Ligue: #\d+ \| ([^\n]+)/);
@@ -394,7 +387,6 @@ export class NlaComponent implements OnInit {
       data.league = leagueInfo.replace(/\s*\|\s*/g, ' ').trim();
     }
 
-    // Venue parsing (German and French)
     let venueMatch = description.match(/Halle: #\d+ \| ([^\n(]+)/);
     if (!venueMatch) {
       venueMatch = description.match(/Salle: #\d+ \| ([^\n(]+)/);
@@ -403,7 +395,6 @@ export class NlaComponent implements OnInit {
       data.venueName = venueMatch[1].trim();
     }
 
-    // Address parsing (same in both languages)
     const addressMatch = description.match(/Adresse: ([^\n]+)/);
     if (addressMatch) {
       data.venueAddress = addressMatch[1].trim();
@@ -413,7 +404,6 @@ export class NlaComponent implements OnInit {
       }
     }
 
-    // Referee parsing (German and French)
     let firstRefMatch = description.match(/1\. SR: ([^|]+)/);
     if (!firstRefMatch) {
       firstRefMatch = description.match(/ARB 1: ([^|]+)/);

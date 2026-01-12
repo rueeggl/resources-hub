@@ -64,29 +64,57 @@ export class NlbComponent implements OnInit {
     this.errorMessage = '';
     this.events = [];
 
-    // Use a CORS proxy for fetching iCal data
-    const proxyUrl = 'https://api.allorigins.win/raw?url=';
-    const url = proxyUrl + encodeURIComponent(this.icalUrl);
+    this.fetchWithFallback(this.icalUrl);
+  }
 
-    this.http.get(url, { responseType: 'text' }).subscribe({
+  private fetchWithFallback(url: string, proxyIndex: number = 0) {
+    const corsProxies = [
+      'https://corsproxy.io/?',
+      'https://api.allorigins.win/raw?url=',
+      'https://api.codetabs.com/v1/proxy?quest='
+    ];
+
+    if (proxyIndex >= corsProxies.length) {
+      this.errorMessage = 'Fehler beim Laden des Kalenders. Alle Proxy-Server sind nicht erreichbar.';
+      this.loading = false;
+      return;
+    }
+
+    const proxyUrl = corsProxies[proxyIndex] + encodeURIComponent(url);
+
+    this.http.get(proxyUrl, { responseType: 'text' }).subscribe({
       next: (data) => {
         const parsedEvents = this.parseICalendar(data);
-        const startOfWeek = this.getStartOfWeek(new Date());
+
+        const today = new Date();
+        const currentDay = today.getDay();
+        const daysToMonday = (currentDay + 6) % 7;
+        const lastWeekStart = new Date(today);
+        lastWeekStart.setDate(today.getDate() - daysToMonday - 7);
+        lastWeekStart.setHours(0, 0, 0, 0);
+
         this.events = parsedEvents.filter(
-          (event) =>
-            event.start.getTime() >= startOfWeek.getTime() &&
-            (event.summary?.includes('ARB 1') || event.summary?.includes('1. SR')) &&
-            event.summary?.includes('(NLB)')
+          (event) => {
+            const isAfterCutoff = event.start.getTime() >= lastWeekStart.getTime();
+            const isFirstReferee = event.summary?.includes('ARB 1') || event.summary?.includes('1. SR');
+            if (!isAfterCutoff || !isFirstReferee) {
+              return false;
+            }
+
+            const summaryText = (event.summary || '') + ' ' + (event.description || '');
+            const hasMobiliar = summaryText.includes('Mobiliar');
+            const hasNLB = summaryText.includes('(NLB)') || summaryText.includes('(LNB)');
+
+            return hasMobiliar || hasNLB;
+          }
         );
         this.loading = false;
         if (this.events.length === 0) {
           this.errorMessage = 'Keine Events gefunden';
         }
       },
-      error: (error) => {
-        console.error('Error loading calendar:', error);
-        this.errorMessage = 'Fehler beim Laden des Kalenders. Bitte überprüfen Sie die URL.';
-        this.loading = false;
+      error: (_error) => {
+        this.fetchWithFallback(url, proxyIndex + 1);
       }
     });
   }
@@ -168,14 +196,6 @@ export class NlbComponent implements OnInit {
     }).format(date);
   }
 
-  private getStartOfWeek(date: Date): Date {
-    const start = new Date(date);
-    const day = start.getDay();
-    const diff = (day + 6) % 7;
-    start.setDate(start.getDate() - diff);
-    start.setHours(0, 0, 0, 0);
-    return start;
-  }
 
   getLrFeedbackLink(event: CalendarEvent): string {
     const params = new URLSearchParams({
@@ -200,8 +220,6 @@ export class NlbComponent implements OnInit {
         alert('Das PDF hat keine ausfüllbaren Felder.');
         return;
       }
-      const fields = form.getFields();
-      console.log('PDF fields:', fields.map(f => f.getName()));
       this.fillPdfFields(form, event);
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
@@ -220,63 +238,54 @@ export class NlbComponent implements OnInit {
 
   private fillPdfFields(form: any, event: CalendarEvent) {
     const parsedData = this.parseEventDescription(event.description || '');
-    console.log('here', parsedData);
 
     try {
       if (parsedData.gameNumber) {
         try {
           form.getTextField('Text9').setText(parsedData.gameNumber);
         } catch (e) {
-          console.log('SpielNr field not found');
         }
       }
       if (parsedData.homeTeam) {
         try {
           form.getTextField('Text10').setText(parsedData.homeTeam);
         } catch (e) {
-          console.log('Heimteam field not found');
         }
       }
       if (parsedData.awayTeam) {
         try {
           form.getTextField('Text12').setText(parsedData.awayTeam);
         } catch (e) {
-          console.log('Gastteam field not found');
         }
       }
       if (parsedData.venueName) {
         try {
           form.getTextField('Text14').setText(parsedData.venueName);
         } catch (e) {
-          console.log('Hallenname field not found');
         }
       }
       if (parsedData.city) {
         try {
           form.getTextField('Text13').setText(parsedData.city);
         } catch (e) {
-          console.log('Ort field not found');
         }
       }
       if (parsedData.gameDate) {
         try {
           form.getTextField('Text11').setText(parsedData.gameDate);
         } catch (e) {
-          console.log('Datum field not found');
         }
       }
       if (parsedData.firstReferee) {
         try {
           form.getTextField('Text23').setText(parsedData.firstReferee);
         } catch (e) {
-          console.log('firstreferee field not found');
         }
       }
       if (parsedData.secondReferee) {
         try {
           form.getTextField('Text24').setText(parsedData.secondReferee);
         } catch (e) {
-          console.log('secondreferee field not found');
         }
       }
       if (parsedData.league) {
@@ -293,11 +302,9 @@ export class NlbComponent implements OnInit {
             }
           }
         } catch (e) {
-          console.log('Gruppe3 radio group not found or could not select:', e);
         }
       }
     } catch (e) {
-      console.error('Error filling PDF fields:', e);
     }
   }
 
@@ -315,7 +322,6 @@ export class NlbComponent implements OnInit {
   } {
     const data: any = {};
 
-    // Try German format first, then French
     let gameMatch = description.match(/Spiel: #(\d+)/);
     if (!gameMatch) {
       gameMatch = description.match(/Match: #(\d+)/);
@@ -324,7 +330,6 @@ export class NlbComponent implements OnInit {
       data.gameNumber = gameMatch[1];
     }
 
-    // Date parsing (German and French)
     let dateMatch = description.match(/Spiel: #\d+ \| (\d{2}\.\d{2}\.\d{4})/);
     if (!dateMatch) {
       dateMatch = description.match(/Match: #\d+ \| (\d{2}\.\d{2}\.\d{4})/);
@@ -333,7 +338,6 @@ export class NlbComponent implements OnInit {
       data.gameDate = dateMatch[1];
     }
 
-    // Teams parsing (German and French)
     let teamsMatch = description.match(/Spiel: #\d+ \| .+ \| (.+) — (.+)/);
     if (!teamsMatch) {
       teamsMatch = description.match(/Match: #\d+ \| .+ \| (.+) — (.+)/);
@@ -343,7 +347,6 @@ export class NlbComponent implements OnInit {
       data.awayTeam = teamsMatch[2].trim();
     }
 
-    // League parsing (German and French)
     let leagueMatch = description.match(/Liga: #\d+ \| ([^\n]+)/);
     if (!leagueMatch) {
       leagueMatch = description.match(/Ligue: #\d+ \| ([^\n]+)/);
@@ -353,7 +356,6 @@ export class NlbComponent implements OnInit {
       data.league = leagueInfo.replace(/\s*\|\s*/g, ' ').trim();
     }
 
-    // Venue parsing (German and French)
     let venueMatch = description.match(/Halle: #\d+ \| ([^\n(]+)/);
     if (!venueMatch) {
       venueMatch = description.match(/Salle: #\d+ \| ([^\n(]+)/);
@@ -362,7 +364,6 @@ export class NlbComponent implements OnInit {
       data.venueName = venueMatch[1].trim();
     }
 
-    // Address parsing (same in both languages)
     const addressMatch = description.match(/Adresse: ([^\n]+)/);
     if (addressMatch) {
       data.venueAddress = addressMatch[1].trim();
@@ -372,7 +373,6 @@ export class NlbComponent implements OnInit {
       }
     }
 
-    // Referee parsing (German and French)
     let firstRefMatch = description.match(/1\. SR: ([^|]+)/);
     if (!firstRefMatch) {
       firstRefMatch = description.match(/ARB 1: ([^|]+)/);
