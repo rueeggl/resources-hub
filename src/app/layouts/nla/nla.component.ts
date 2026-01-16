@@ -65,29 +65,60 @@ export class NlaComponent implements OnInit {
     this.errorMessage = '';
     this.events = [];
 
-    // Use a CORS proxy for fetching iCal data
-    const proxyUrl = 'https://api.allorigins.win/raw?url=';
-    const url = proxyUrl + encodeURIComponent(this.icalUrl);
+    // Try fetching with multiple CORS proxies as fallback
+    this.fetchWithFallback(this.icalUrl);
+  }
 
-    this.http.get(url, { responseType: 'text' }).subscribe({
+  private fetchWithFallback(url: string, proxyIndex: number = 0) {
+    const corsProxies = [
+      'https://corsproxy.io/?',
+      'https://api.allorigins.win/raw?url=',
+      'https://api.codetabs.com/v1/proxy?quest='
+    ];
+
+    if (proxyIndex >= corsProxies.length) {
+      this.errorMessage = 'Fehler beim Laden des Kalenders. Alle Proxy-Server sind nicht erreichbar.';
+      this.loading = false;
+      return;
+    }
+
+    const proxyUrl = corsProxies[proxyIndex] + encodeURIComponent(url);
+
+    this.http.get(proxyUrl, { responseType: 'text' }).subscribe({
       next: (data) => {
         const parsedEvents = this.parseICalendar(data);
-        const startOfWeek = this.getStartOfWeek(new Date());
+
+        const today = new Date();
+        const currentDay = today.getDay();
+        const daysToMonday = (currentDay + 6) % 7;
+        const lastWeekStart = new Date(today);
+        lastWeekStart.setDate(today.getDate() - daysToMonday - 7);
+        lastWeekStart.setHours(0, 0, 0, 0);
+
         this.events = parsedEvents.filter(
-          (event) =>
-            event.start.getTime() >= startOfWeek.getTime() &&
-            (event.summary?.includes('ARB 1') || event.summary?.includes('1. SR')) &&
-            event.summary?.includes('(NLA)')
+          (event) => {
+            const isAfterCutoff = event.start.getTime() >= lastWeekStart.getTime();
+            const isFirstReferee = event.summary?.includes('ARB 1') || event.summary?.includes('1. SR');
+
+            if (!isAfterCutoff || !isFirstReferee) {
+              return false;
+            }
+
+            const summaryText = (event.summary || '') + ' ' + (event.description || '');
+            const hasMobiliar = summaryText.includes('Mobiliar');
+            const hasNLA = summaryText.includes('(NLA)') || summaryText.includes('(LNA)');
+
+            return hasMobiliar || hasNLA;
+          }
         );
+
         this.loading = false;
         if (this.events.length === 0) {
           this.errorMessage = 'Keine Events gefunden';
         }
       },
-      error: (error) => {
-        console.error('Error loading calendar:', error);
-        this.errorMessage = 'Fehler beim Laden des Kalenders. Bitte überprüfen Sie die URL.';
-        this.loading = false;
+      error: (_error) => {
+        this.fetchWithFallback(url, proxyIndex + 1);
       }
     });
   }
@@ -95,18 +126,38 @@ export class NlaComponent implements OnInit {
   private parseICalDate(dateStr: string): Date | null {
     if (!dateStr) return null;
 
-    // Remove TZID and other parameters
-    dateStr = dateStr.split(':').pop() || '';
+    console.log('Parsing full date line:', dateStr);
 
-    // Handle both date and datetime formats
-    const year = parseInt(dateStr.substring(0, 4));
-    const month = parseInt(dateStr.substring(4, 6)) - 1;
-    const day = parseInt(dateStr.substring(6, 8));
+    const isUTC = dateStr.includes('TZID=UTC');
 
-    if (dateStr.length > 8) {
-      const hour = parseInt(dateStr.substring(9, 11));
-      const minute = parseInt(dateStr.substring(11, 13));
-      return new Date(year, month, day, hour, minute);
+    // Extract the date value (after the last colon)
+    const colonIndex = dateStr.lastIndexOf(':');
+    if (colonIndex === -1) return null;
+
+    const dateValue = dateStr.substring(colonIndex + 1);
+
+    console.log('Is UTC?', isUTC);
+    console.log('Date value:', dateValue);
+
+    const year = parseInt(dateValue.substring(0, 4));
+    const month = parseInt(dateValue.substring(4, 6)) - 1;
+    const day = parseInt(dateValue.substring(6, 8));
+
+    if (dateValue.length > 8) {
+      const hour = parseInt(dateValue.substring(9, 11));
+      const minute = parseInt(dateValue.substring(11, 13));
+
+      console.log('Parsed time:', hour, ':', minute);
+
+      let resultDate;
+      if (isUTC) {
+        resultDate = new Date(Date.UTC(year, month, day, hour, minute));
+        console.log('Created UTC date:', resultDate.toISOString(), '-> Local:', resultDate.toString());
+      } else {
+        resultDate = new Date(year, month, day, hour, minute);
+        console.log('Created local date:', resultDate.toString());
+      }
+      return resultDate;
     }
 
     return new Date(year, month, day);
@@ -120,7 +171,6 @@ export class NlaComponent implements OnInit {
     for (let i = 0; i < lines.length; i++) {
       let line = lines[i].trim();
 
-      // Handle line folding (continuation lines start with space or tab)
       while (i + 1 < lines.length && (lines[i + 1].startsWith(' ') || lines[i + 1].startsWith('\t'))) {
         i++;
         line += lines[i].substring(1);
@@ -138,10 +188,10 @@ export class NlaComponent implements OnInit {
           const value = line.substring(colonIndex + 1);
 
           if (key.startsWith('DTSTART')) {
-            const date = this.parseICalDate(value);
+            const date = this.parseICalDate(line);
             if (date) currentEvent.start = date;
           } else if (key.startsWith('DTEND')) {
-            const date = this.parseICalDate(value);
+            const date = this.parseICalDate(line);
             if (date) currentEvent.end = date;
           } else if (key === 'SUMMARY') {
             currentEvent.summary = this.decodeICalText(value);
@@ -154,7 +204,6 @@ export class NlaComponent implements OnInit {
       }
     }
 
-    // Sort events by start date
     return events.sort((a, b) => a.start.getTime() - b.start.getTime());
   }
 
@@ -176,20 +225,15 @@ export class NlaComponent implements OnInit {
   }
 
   formatTime(date: Date): string {
-    return new Intl.DateTimeFormat('de-CH', {
+    console.log('formatTime input:', date.toString(), 'ISO:', date.toISOString());
+    const formatted = new Intl.DateTimeFormat('de-CH', {
       hour: '2-digit',
       minute: '2-digit'
     }).format(date);
+    console.log('formatTime output:', formatted);
+    return formatted;
   }
 
-  private getStartOfWeek(date: Date): Date {
-    const start = new Date(date);
-    const day = start.getDay();
-    const diff = (day + 6) % 7; // Monday as start of the week
-    start.setDate(start.getDate() - diff);
-    start.setHours(0, 0, 0, 0);
-    return start;
-  }
 
   getLrFeedbackLink(event: CalendarEvent): string {
     const params = new URLSearchParams({
@@ -240,82 +284,64 @@ export class NlaComponent implements OnInit {
   }
 
   private fillPdfFields(form: any, event: CalendarEvent) {
-    // Parse event description to extract structured data
     const parsedData = this.parseEventDescription(event.description || '');
     try {
-      // Fill SpielNr field with game number
       if (parsedData.gameNumber) {
         try {
           form.getTextField('SpielNr').setText(parsedData.gameNumber);
         } catch (e) {
-          console.log('SpielNr field not found');
         }
       }
 
-      // Fill Heimteam (home team)
       if (parsedData.homeTeam) {
         try {
           form.getTextField('Heimteam').setText(parsedData.homeTeam);
         } catch (e) {
-          console.log('Heimteam field not found');
         }
       }
 
-      // Fill Gastteam (away team)
       if (parsedData.awayTeam) {
         try {
           form.getTextField('Gastteam').setText(parsedData.awayTeam);
         } catch (e) {
-          console.log('Gastteam field not found');
         }
       }
 
-      // Fill Hallenname (venue name)
       if (parsedData.venueName) {
         try {
           form.getTextField('Hallenname').setText(parsedData.venueName);
         } catch (e) {
-          console.log('Hallenname field not found');
         }
       }
 
-      // Fill Ort (city with postal code)
       if (parsedData.city) {
         try {
           form.getTextField('Ort').setText(parsedData.city);
         } catch (e) {
-          console.log('Ort field not found');
         }
       }
 
-      // Fill Datum (date in DD.MM.YYYY format)
       if (parsedData.gameDate) {
         try {
           form.getTextField('Datum').setText(parsedData.gameDate);
         } catch (e) {
-          console.log('Datum field not found');
         }
       }
 
-      // Fill Text19 (1. SR name)
       if (parsedData.firstReferee) {
         try {
           form.getTextField('Text19').setText(parsedData.firstReferee);
         } catch (e) {
-          console.log('Text19 field not found');
         }
       }
 
-      // Fill Text20 (2. SR name)
       if (parsedData.secondReferee) {
         try {
           form.getTextField('Text20').setText(parsedData.secondReferee);
         } catch (e) {
-          console.log('Text20 field not found');
         }
       }
 
-      // Check radio button for gender
       if (parsedData.league) {
         try {
           const radioGroup = form.getRadioGroup('Gruppe3');
@@ -323,22 +349,18 @@ export class NlaComponent implements OnInit {
 
           if (options.length > 0) {
             if (parsedData.league.includes('♂')) {
-              // Male - select first option
               radioGroup.select(options[0]);
             } else if (parsedData.league.includes('♀')) {
-              // Female - select second option
               if (options.length > 1) {
                 radioGroup.select(options[1]);
               }
             }
           }
         } catch (e) {
-          console.log('Gruppe3 radio group not found or could not select:', e);
         }
       }
 
     } catch (e) {
-      console.error('Error filling PDF fields:', e);
     }
   }
 
@@ -356,60 +378,69 @@ export class NlaComponent implements OnInit {
   } {
     const data: any = {};
 
-    // Extract game number (e.g., #377790)
-    const gameMatch = description.match(/Spiel: #(\d+)/);
+    let gameMatch = description.match(/Spiel: #(\d+)/);
+    if (!gameMatch) {
+      gameMatch = description.match(/Match: #(\d+)/);
+    }
     if (gameMatch) {
       data.gameNumber = gameMatch[1];
     }
 
-    // Extract game date (e.g., "29.11.2025 18:00" from "Spiel: #377790 | 29.11.2025 18:00 | ...")
-    const dateMatch = description.match(/Spiel: #\d+ \| (\d{2}\.\d{2}\.\d{4})/);
+    let dateMatch = description.match(/Spiel: #\d+ \| (\d{2}\.\d{2}\.\d{4})/);
+    if (!dateMatch) {
+      dateMatch = description.match(/Match: #\d+ \| (\d{2}\.\d{2}\.\d{4})/);
+    }
     if (dateMatch) {
       data.gameDate = dateMatch[1];
     }
 
-    // Extract teams (e.g., Lausanne UC — Volley Amriswil)
-    const teamsMatch = description.match(/Spiel: #\d+ \| .+ \| (.+) — (.+)/);
+    let teamsMatch = description.match(/Spiel: #\d+ \| .+ \| (.+) — (.+)/);
+    if (!teamsMatch) {
+      teamsMatch = description.match(/Match: #\d+ \| .+ \| (.+) — (.+)/);
+    }
     if (teamsMatch) {
       data.homeTeam = teamsMatch[1].trim();
       data.awayTeam = teamsMatch[2].trim();
     }
 
-    // Extract league (e.g., "NLA | ♂" from "Liga: #6607 | NLA | ♂")
-    const leagueMatch = description.match(/Liga: #\d+ \| ([^\n]+)/);
+    let leagueMatch = description.match(/Liga: #\d+ \| ([^\n]+)/);
+    if (!leagueMatch) {
+      leagueMatch = description.match(/Ligue: #\d+ \| ([^\n]+)/);
+    }
     if (leagueMatch) {
-      // Extract both league name and gender symbol
       const leagueInfo = leagueMatch[1].trim();
-      // Remove extra pipes and spaces, combine league and gender (e.g., "NLA | ♂" -> "NLA ♂")
       data.league = leagueInfo.replace(/\s*\|\s*/g, ' ').trim();
     }
 
-    // Extract venue name (e.g., "Centre Sportif Unil SOS II Dorigny 1-3" from "Halle: #82 | Centre Sportif Unil SOS II Dorigny 1-3 (A)")
-    const venueMatch = description.match(/Halle: #\d+ \| ([^\n(]+)/);
+    let venueMatch = description.match(/Halle: #\d+ \| ([^\n(]+)/);
+    if (!venueMatch) {
+      venueMatch = description.match(/Salle: #\d+ \| ([^\n(]+)/);
+    }
     if (venueMatch) {
       data.venueName = venueMatch[1].trim();
     }
 
-    // Extract venue address and parse city
     const addressMatch = description.match(/Adresse: ([^\n]+)/);
     if (addressMatch) {
       data.venueAddress = addressMatch[1].trim();
-
-      // Extract postal code + city (e.g., "1015 Lausanne" from "Route Cantonale 11, 1015 Lausanne")
       const cityMatch = addressMatch[1].match(/(\d{4}\s+[^,]+)/);
       if (cityMatch) {
         data.city = cityMatch[1].trim();
       }
     }
 
-    // Extract 1. SR name (e.g., "Laura Rüegg" from "1. SR: Laura Rüegg | laura.rueegg@me.com | +41796558486")
-    const firstRefMatch = description.match(/1\. SR: ([^|]+)/);
+    let firstRefMatch = description.match(/1\. SR: ([^|]+)/);
+    if (!firstRefMatch) {
+      firstRefMatch = description.match(/ARB 1: ([^|]+)/);
+    }
     if (firstRefMatch) {
       data.firstReferee = firstRefMatch[1].trim();
     }
 
-    // Extract 2. SR name (e.g., "Thierry Mordasini" from "2. SR: Thierry Mordasini | thierryvolley@hotmail.ch | +41794433107")
-    const secondRefMatch = description.match(/2\. SR: ([^|]+)/);
+    let secondRefMatch = description.match(/2\. SR: ([^|]+)/);
+    if (!secondRefMatch) {
+      secondRefMatch = description.match(/ARB 2: ([^|]+)/);
+    }
     if (secondRefMatch) {
       data.secondReferee = secondRefMatch[1].trim();
     }
