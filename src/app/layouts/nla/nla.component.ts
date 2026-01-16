@@ -216,12 +216,10 @@ export class NlaComponent implements OnInit {
   }
 
   formatTime(date: Date): string {
-    console.log('formatTime input:', date.toString(), 'ISO:', date.toISOString());
     const formatted = new Intl.DateTimeFormat('de-CH', {
       hour: '2-digit',
       minute: '2-digit'
     }).format(date);
-    console.log('formatTime output:', formatted);
     return formatted;
   }
 
