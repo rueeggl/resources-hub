@@ -126,8 +126,6 @@ export class NlaComponent implements OnInit {
   private parseICalDate(dateStr: string): Date | null {
     if (!dateStr) return null;
 
-    console.log('Parsing full date line:', dateStr);
-
     const isUTC = dateStr.includes('TZID=UTC');
 
     // Extract the date value (after the last colon)
@@ -135,9 +133,6 @@ export class NlaComponent implements OnInit {
     if (colonIndex === -1) return null;
 
     const dateValue = dateStr.substring(colonIndex + 1);
-
-    console.log('Is UTC?', isUTC);
-    console.log('Date value:', dateValue);
 
     const year = parseInt(dateValue.substring(0, 4));
     const month = parseInt(dateValue.substring(4, 6)) - 1;
@@ -147,15 +142,11 @@ export class NlaComponent implements OnInit {
       const hour = parseInt(dateValue.substring(9, 11));
       const minute = parseInt(dateValue.substring(11, 13));
 
-      console.log('Parsed time:', hour, ':', minute);
-
       let resultDate;
       if (isUTC) {
         resultDate = new Date(Date.UTC(year, month, day, hour, minute));
-        console.log('Created UTC date:', resultDate.toISOString(), '-> Local:', resultDate.toString());
       } else {
         resultDate = new Date(year, month, day, hour, minute);
-        console.log('Created local date:', resultDate.toString());
       }
       return resultDate;
     }
