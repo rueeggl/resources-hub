@@ -96,7 +96,7 @@ export class NlbComponent implements OnInit {
         this.events = parsedEvents.filter(
           (event) => {
             const isAfterCutoff = event.start.getTime() >= lastWeekStart.getTime();
-            const isFirstReferee = event.summary?.includes('ARB 1') || event.summary?.includes('1. SR');
+            const isFirstReferee = event.summary?.includes('ARB 1') || event.summary?.includes('1. SR') || event.summary?.includes('1. Arbitro');
             if (!isAfterCutoff || !isFirstReferee) {
               return false;
             }
@@ -340,6 +340,9 @@ export class NlbComponent implements OnInit {
     if (!gameMatch) {
       gameMatch = description.match(/Match: #(\d+)/);
     }
+    if (!gameMatch) {
+      gameMatch = description.match(/Partita: #(\d+)/);
+    }
     if (gameMatch) {
       data.gameNumber = gameMatch[1];
     }
@@ -348,6 +351,9 @@ export class NlbComponent implements OnInit {
     if (!dateMatch) {
       dateMatch = description.match(/Match: #\d+ \| (\d{2}\.\d{2}\.\d{4})/);
     }
+    if (!dateMatch) {
+      dateMatch = description.match(/Partita: #\d+ \| (\d{2}\.\d{2}\.\d{4})/);
+    }
     if (dateMatch) {
       data.gameDate = dateMatch[1];
     }
@@ -355,6 +361,9 @@ export class NlbComponent implements OnInit {
     let teamsMatch = description.match(/Spiel: #\d+ \| .+ \| (.+) — (.+)/);
     if (!teamsMatch) {
       teamsMatch = description.match(/Match: #\d+ \| .+ \| (.+) — (.+)/);
+    }
+    if (!teamsMatch) {
+      teamsMatch = description.match(/Partita: #\d+ \| .+ \| (.+) — (.+)/);
     }
     if (teamsMatch) {
       data.homeTeam = teamsMatch[1].trim();
@@ -365,6 +374,9 @@ export class NlbComponent implements OnInit {
     if (!leagueMatch) {
       leagueMatch = description.match(/Ligue: #\d+ \| ([^\n]+)/);
     }
+    if (!leagueMatch) {
+      leagueMatch = description.match(/Lega: #\d+ \| ([^\n]+)/);
+    }
     if (leagueMatch) {
       const leagueInfo = leagueMatch[1].trim();
       data.league = leagueInfo.replace(/\s*\|\s*/g, ' ').trim();
@@ -374,11 +386,14 @@ export class NlbComponent implements OnInit {
     if (!venueMatch) {
       venueMatch = description.match(/Salle: #\d+ \| ([^\n(]+)/);
     }
+    if (!venueMatch) {
+      venueMatch = description.match(/Palestra: #\d+ \| ([^\n(]+)/);
+    }
     if (venueMatch) {
       data.venueName = venueMatch[1].trim();
     }
 
-    const addressMatch = description.match(/Adresse: ([^\n]+)/);
+    const addressMatch = description.match(/Adresse: ([^\n]+)/) || description.match(/Indirizzo: ([^\n]+)/);
     if (addressMatch) {
       data.venueAddress = addressMatch[1].trim();
       const cityMatch = addressMatch[1].match(/(\d{4}\s+[^,]+)/);
@@ -391,6 +406,9 @@ export class NlbComponent implements OnInit {
     if (!firstRefMatch) {
       firstRefMatch = description.match(/ARB 1: ([^|]+)/);
     }
+    if (!firstRefMatch) {
+      firstRefMatch = description.match(/1\. Arbitro: ([^|]+)/);
+    }
     if (firstRefMatch) {
       data.firstReferee = firstRefMatch[1].trim();
     }
@@ -398,6 +416,9 @@ export class NlbComponent implements OnInit {
     let secondRefMatch = description.match(/2\. SR: ([^|]+)/);
     if (!secondRefMatch) {
       secondRefMatch = description.match(/ARB 2: ([^|]+)/);
+    }
+    if (!secondRefMatch) {
+      secondRefMatch = description.match(/2\. Arbitro: ([^|]+)/);
     }
     if (secondRefMatch) {
       data.secondReferee = secondRefMatch[1].trim();
